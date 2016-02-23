@@ -2,8 +2,8 @@
 var redis = require("redis"),
     client = redis.createClient({detect_buffers: true, return_buffers: true});
 
-client.on('error', function(err) {
-	// console.log(err);
+client.on('error', function(err, a, b) {
+	client.end();
 });
 
 var memCache = {

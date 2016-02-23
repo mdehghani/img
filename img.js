@@ -156,50 +156,63 @@ if (cluster.isMaster) {
 			resizedPath = path.join(parsed.dir, parsed.name + '_' + (w || 0) + '_' + (h || 0) + parsed.ext);
 			size = {w: +w, h: +h};
 		}
-		getFile(resizedPath, origPath, size, function(err, filePath, data) {
-			// if (filePath)
-			// 	console.log(filePath);
-			var sendFilePath = function(fp) {
-				if (fp) {
-					res.sendFile(path.resolve(fp), function(err) {
-						if (!err) return;
-						// if (err.statusCode == 404)
-						console.log(err);
-						return res.sendStatus(500);
-						// res.end();
-					});
+
+		function mainGetFile() {
+				getFile(resizedPath, origPath, size, function(err, filePath, data) {
+				// if (filePath)
+				// 	console.log(filePath);
+				var sendFilePath = function(fp) {
+					if (fp) {
+						res.sendFile(path.resolve(fp), function(err) {
+							if (!err) return;
+							// if (err.statusCode == 404)
+							console.log(err);
+							return res.sendStatus(500);
+							// res.end();
+						});
+					}
+					else {
+						res.end(data);
+					}
 				}
-				else {
-					res.end(data);
+				if (err == 'notFound') {
+					res.sendStatus(404);
 				}
-			}
-			if (err == 'notFound') {
+				else if (err) return res.sendStatus(500);
+				else if (!filePath && !data) {
+					res.sendStatus(500);
+				}
+				else
+					sendFilePath(filePath);
+				
+			});
+
+		}
+
+		var origFullPath = path.join(basePath, origPath);
+		exists(origFullPath, function(ex) {
+			if (!ex) {
+				var mainPath = req.path;
+				if (mainPath.indexOf('?') >= 0)
+					mainPath = mainPath.substr(0, mainPath.indexOf('?'));
 				var options = {
 					hostname: mainUrl,
-				    path: req.path,
+				    path: mainPath
 				}
-				var p = path.join(basePath, origPath);
 				var request = http.request(options, function(rs) {
-					mkdirp(path.dirname(p), function() {
-						var ws = fs.createWriteStream(p);
-						// console.log(2);
+					mkdirp(path.dirname(origFullPath), function() {
+						var ws = fs.createWriteStream(origFullPath);
 						rs.pipe(ws);
 						rs.on('end', function() {
-							sendFilePath(p);
+							mainGetFile();
 						})
 					})
 				});
 				request.end();
 			}
-			else if (err) return res.sendStatus(500);
-			else if (!filePath && !data) {
-				res.sendStatus(500);
-			}
 			else
-				sendFilePath(filePath);
-			
+				mainGetFile();
 		})
-
 
 		// var filePath = path.resolve(path.join(basePath, folder, file));
 		// console.log(filePath);

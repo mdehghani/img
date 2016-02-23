@@ -1,4 +1,5 @@
 var path = require('path');
+var http = require('http');
 var fs = require('fs');
 var mkdirp = require('mkdirp');
 var express = require('express');
@@ -15,6 +16,8 @@ var basePath = argv.base || 'files';
 var cacheBasePath = argv.cache2 || 'cache';
 var redis = true;
 var STEP = 50;
+
+var mainUrl = 'img.taaghche.ir';
 
 // var transformer = sharp('a.jpg')
 	// .resize(10, 10)
@@ -75,19 +78,23 @@ function getFile(p, originalPath, size, cb) {
 	var cachePath = path.join(cacheBasePath, p);
 	var physicalPath = path.join(basePath, originalPath);
 
-	if (p == originalPath) return cb(null, physicalPath);
-	console.log(1);
+	if (p == originalPath) {
+		return exists(physicalPath, function(ex) {
+			if (ex)
+				return cb(null, physicalPath);
+			return cb('notFound');
+		});
+	}
 
 	var start = +new Date();
 	memCache.get(p, function(err, data) {
-		console.log(+new Date() - start);
 		if (!err && data) //cache hit
 			return cb(null, null, data);
 		// cache miss or error
 		var setMemCacheAndSend = function(resultPath) {
 			cb(null, resultPath);
 			fs.readFile(resultPath, function(err, data) {
-				console.log(data.length);
+				// console.log(data.length);
 				if (!err)
 					memCache.set(p, data);
 			})
@@ -131,14 +138,14 @@ if (cluster.isMaster) {
 		file = file.toLowerCase();
 
 		// console.log(folder, file);
-		var filePath = path.join(folder, file);
+		var origPath = path.join(folder, file);
 		var w = req.query.w || req.query.width;
 		var h = req.query.h || req.query.height;
-		var resizedPath = filePath;
+		var resizedPath = origPath;
 		var size = null;
 		if (w || h) {
 			if (w > 4000 || h > 4000) return res.sendStatus(404);
-			var parsed = path.parse(filePath);
+			var parsed = path.parse(origPath);
 			if (w) h = null;
 			w = w || 0;
 			h = h || 0;
@@ -149,23 +156,47 @@ if (cluster.isMaster) {
 			resizedPath = path.join(parsed.dir, parsed.name + '_' + (w || 0) + '_' + (h || 0) + parsed.ext);
 			size = {w: +w, h: +h};
 		}
-		getFile(resizedPath, filePath, size, function(err, filePath, data) {
+		getFile(resizedPath, origPath, size, function(err, filePath, data) {
 			// if (filePath)
 			// 	console.log(filePath);
-			if (err == 'notFound') return res.sendFile('/home/dehghani/code/img/files/frontcover/100.jpg'); //res.sendStatus(404);
-			if (err) return res.sendStatus(500);
-			if (!filePath && !data) return res.sendStatus(404);
-			if (filePath) {
-				res.sendFile(path.resolve(filePath), function(err) {
-					if (!err) return;
-					if (err.statusCode == 404) return res.sendStatus(404);
-					console.log(err);
-					res.end();
+			var sendFilePath = function(fp) {
+				if (fp) {
+					res.sendFile(path.resolve(fp), function(err) {
+						if (!err) return;
+						// if (err.statusCode == 404)
+						console.log(err);
+						return res.sendStatus(500);
+						// res.end();
+					});
+				}
+				else {
+					res.end(data);
+				}
+			}
+			if (err == 'notFound') {
+				var options = {
+					hostname: mainUrl,
+				    path: req.path,
+				}
+				var p = path.join(basePath, origPath);
+				var request = http.request(options, function(rs) {
+					mkdirp(path.dirname(p), function() {
+						var ws = fs.createWriteStream(p);
+						// console.log(2);
+						rs.pipe(ws);
+						rs.on('end', function() {
+							sendFilePath(p);
+						})
+					})
 				});
+				request.end();
 			}
-			else {
-				res.end(data);
+			else if (err) return res.sendStatus(500);
+			else if (!filePath && !data) {
+				res.sendStatus(500);
 			}
+			else
+				sendFilePath(filePath);
 			
 		})
 

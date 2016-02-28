@@ -150,6 +150,8 @@ if (cluster.isMaster) {
 		var h = req.query.h || req.query.height;
 		var resizedPath = origPath;
 		var size = null;
+		w = +w;
+		h = +h;
 		if (w || h) {
 			if (w > 4000 || h > 4000) return res.sendStatus(404);
 			var parsed = path.parse(origPath);

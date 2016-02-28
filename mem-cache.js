@@ -3,6 +3,7 @@ var redis = require("redis"),
     client = redis.createClient({detect_buffers: true, return_buffers: true});
 
 client.on('error', function(err, a, b) {
+	console.log(err, a, b);
 	client.end();
 });
 

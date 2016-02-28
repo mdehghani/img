@@ -146,6 +146,8 @@ if (cluster.isMaster) {
 		if (w || h) {
 			if (w > 4000 || h > 4000) return res.sendStatus(404);
 			var parsed = path.parse(origPath);
+			w = +w;
+			h = +h;
 			if (w) h = null;
 			w = w || 0;
 			h = h || 0;

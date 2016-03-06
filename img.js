@@ -79,6 +79,7 @@ var requestQ = async.queue(function(item, callback) {
 		if (rs.statusCode != 200) {
 			item.cb(rs.statusCode);
 			callback();
+			return;
 		}
 		mkdirp(path.dirname(item.cachePath), function() {
 			var ws = fs.createWriteStream(item.cachePath);

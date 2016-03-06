@@ -83,11 +83,16 @@ var requestQ = async.queue(function(item, callback) {
 		}
 		mkdirp(path.dirname(item.cachePath), function() {
 			var ws = fs.createWriteStream(item.cachePath);
+			var data = 0;
 			rs.pipe(ws);
 			ws.on('finish', function() {
-				item.setMemCacheAndSend(item.cachePath, item.cb);
+				if (data)
+					item.setMemCacheAndSend(item.cachePath, item.cb);
 				callback();
 			});
+			rs.on('data', function(dat) {
+				data += dat.length;
+			})
 			ws.on('error', function() {
 				item.cb('err');
 				callback();

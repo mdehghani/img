@@ -85,7 +85,7 @@ var requestQ = async.queue(function(item, callback) {
 			var ws = fs.createWriteStream(item.cachePath);
 			rs.pipe(ws);
 			ws.on('finish', function() {
-				item.setMemCacheAndSend(item.cachePath);
+				item.setMemCacheAndSend(item.cachePath, item.cb);
 				callback();
 			});
 			ws.on('error', function() {
@@ -117,7 +117,7 @@ function getFile(p, key, req, size, cb) {
 		if (!err && data) //cache hit
 			return cb(null, null, data);
 		// cache miss or error
-		var setMemCacheAndSend = function(resultPath) {
+		var setMemCacheAndSend = function(resultPath, cb) {
 			cb(null, resultPath);
 			fs.readFile(resultPath, function(err, data) {
 				// console.log(data.length);
@@ -127,7 +127,7 @@ function getFile(p, key, req, size, cb) {
 		}
 		//search in disk cache
 		exists(cachePath, function(ex1) {
-			if (ex1) return setMemCacheAndSend(cachePath);
+			if (ex1) return setMemCacheAndSend(cachePath, cb);
 			requestQ.push({req: req, cachePath: cachePath, setMemCacheAndSend: setMemCacheAndSend, cb: cb});
 		});
 	});

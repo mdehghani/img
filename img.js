@@ -100,7 +100,7 @@ var requestQ = async.queue(function(item, callback) {
 		})
 	});
 	request.end();
-}, 100);
+}, 2000);
 
 function resize(filePath, size, cachePath, cb) {
 	resizeQ.push({path: filePath, cachePath: cachePath, size: size, cb: cb});

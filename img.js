@@ -70,6 +70,32 @@ var resizeQ = async.queue(function(item, cb) {
 	// gmResult.write(item.cachePath, item.cb);
 }, 20);
 
+var requestQ = async.queue(function(item, callback) {
+	var options = {
+		hostname: mainUrl,
+	    path: item.req.url
+	}
+	var request = http.request(options, function(rs) {
+		if (rs.statusCode != 200) {
+			item.cb(rs.statusCode);
+			callback();
+		}
+		mkdirp(path.dirname(item.cachePath), function() {
+			var ws = fs.createWriteStream(item.cachePath);
+			rs.pipe(ws);
+			ws.on('finish', function() {
+				setMemCacheAndSend(item.cachePath);
+				callback();
+			});
+			ws.on('error', function() {
+				item.cb('err');
+				callback();
+			})
+		})
+	});
+	request.end();
+}, 100);
+
 function resize(filePath, size, cachePath, cb) {
 	resizeQ.push({path: filePath, cachePath: cachePath, size: size, cb: cb});
 }
@@ -101,25 +127,7 @@ function getFile(p, key, req, size, cb) {
 		//search in disk cache
 		exists(cachePath, function(ex1) {
 			if (ex1) return setMemCacheAndSend(cachePath);
-
-			var options = {
-				hostname: mainUrl,
-			    path: req.url
-			}
-			var request = http.request(options, function(rs) {
-				if (rs.statusCode != 200) return cb(rs.statusCode);
-				mkdirp(path.dirname(cachePath), function() {
-					var ws = fs.createWriteStream(cachePath);
-					rs.pipe(ws);
-					ws.on('finish', function() {
-						setMemCacheAndSend(cachePath);
-					});
-					ws.on('error', function() {
-						cb('err');
-					})
-				})
-			});
-			request.end();
+			requestQ.push({req: req, cachePath: cachePath, cb: cb});
 		});
 	});
 }

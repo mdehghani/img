@@ -188,6 +188,10 @@ if (cluster.isMaster) {
 			// if (filePath)
 			// 	console.log(filePath);
 			var sendFilePath = function(fp) {
+				res.setHeader('Cache-Control', 'public');
+				var expires = new Date();
+				expires.setHours(expires.getHours() + 10);
+				res.setHeader('Expires', expires);
 				if (fp) {
 					res.sendFile(path.resolve(fp), function(err) {
 						if (!err) return;

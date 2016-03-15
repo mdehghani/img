@@ -4,6 +4,7 @@ var fs = require('fs');
 var mkdirp = require('mkdirp');
 var express = require('express');
 var async = require('async');
+var crypto = require('crypto');
 var sharp = require('sharp');
 var app = express();
 var argv = require('minimist')(process.argv.slice(2));
@@ -188,22 +189,36 @@ if (cluster.isMaster) {
 			// if (filePath)
 			// 	console.log(filePath);
 			var sendFilePath = function(fp) {
-				res.setHeader('Cache-Control', 'public');
-				var expires = new Date();
-				expires.setHours(expires.getHours() + 10);
-				res.setHeader('Expires', expires);
-				if (fp) {
-					res.sendFile(path.resolve(fp), function(err) {
-						if (!err) return;
-						// if (err.statusCode == 404)
-						console.log(err);
-						return res.sendStatus(500);
-						// res.end();
-					});
+				var doSend = function() {
+					res.setHeader('Cache-Control', 'public');
+					var expires = new Date();
+					expires.setHours(expires.getHours() + 10);
+					res.setHeader('Expires', expires);
+					if (fp) {
+						res.sendFile(path.resolve(fp), function(err) {
+							if (!err) return;
+							// if (err.statusCode == 404)
+							console.log(err);
+							return res.sendStatus(500);
+							// res.end();
+						});
+					}
+					else {
+						res.end(data);
+					}
 				}
-				else {
-					res.end(data);
-				}
+
+				var expected = req.headers['if-none-match'];
+				var hash = crypto.createHash('sha256');
+				hash.on('readable', function() {
+				  var data = hash.read();
+				  var etag = data.toString('hex');
+				  if (expected && expected  == etag) return res.sendStatus(304).end();
+				  res.setHeader('ETag', etag);
+				  doSend();
+				});
+				if (fp) fs.createReadStream(fp).pipe(hash);
+				else hash.end(data);
 			}
 			if (err == 'notFound') {
 				res.sendStatus(404);

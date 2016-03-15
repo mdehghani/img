@@ -212,13 +212,20 @@ if (cluster.isMaster) {
 				var hash = crypto.createHash('sha256');
 				hash.on('readable', function() {
 				  var data = hash.read();
-				  var etag = data.toString('hex');
+				  if (!data) return;
+				  var etag = null;
+				  if (data)
+				  	etag = data.toString('hex');
+
 				  if (expected && expected  == etag) return res.sendStatus(304).end();
 				  res.setHeader('ETag', etag);
 				  doSend();
 				});
 				if (fp) fs.createReadStream(fp).pipe(hash);
-				else hash.end(data);
+				else {
+					hash.write(data);
+					hash.end();
+				}
 			}
 			if (err == 'notFound') {
 				res.sendStatus(404);

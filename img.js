@@ -17,7 +17,7 @@ var cacheBasePath = argv.cache || 'cache';
 var redis = true;
 var STEP = 50;
 
-var mainUrl = 'img.taaghche.ir';
+var mainUrl = 'test.taaghche.ir';
 
 // var transformer = sharp('a.jpg')
 	// .resize(10, 10)
@@ -86,8 +86,13 @@ var requestQ = async.queue(function(item, callback) {
 			var data = 0;
 			rs.pipe(ws);
 			ws.on('finish', function() {
+				console.log(data, item.cachePath);
 				if (data)
 					item.setMemCacheAndSend(item.cachePath, item.cb);
+				else {
+					console.log('removed');
+					fs.unlink(item.cachePath, function(){});
+				}
 				callback();
 			});
 			rs.on('data', function(dat) {

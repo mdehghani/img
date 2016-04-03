@@ -180,10 +180,10 @@ if (cluster.isMaster) {
 		var h = req.query.h || req.query.height;
 		var resizedPath = origPath;
 		var size = null;
+		var parsed = path.parse(origPath);
 		w = +w;
 		h = +h;
 		if (w || h) {
-			var parsed = path.parse(origPath);
 			if (w) h = null;
 			w = w || 0;
 			h = h || 0;
@@ -191,9 +191,12 @@ if (cluster.isMaster) {
 				w = Math.ceil(w / STEP) * STEP;
 			if (h % STEP)
 				h = Math.ceil(h / STEP) * STEP;
-			resizedPath = path.join(parsed.dir, parsed.name + '_' + (w || 0) + '_' + (h || 0) + parsed.ext);
+			// resizedPath = path.join(parsed.dir, parsed.name + '_' + (w || 0) + '_' + (h || 0) + parsed.ext);
+			resizedPath = path.join(resizedPath, (w || 0) + '_' + (h || 0) + parsed.ext);
 			size = {w: +w, h: +h};
 		}
+		else
+			resizedPath = path.join(resizedPath, 'orig' + parsed.ext);
 
 		getFile(resizedPath, key, req, size, function(err, filePath, data) {
 			// if (filePath)
@@ -268,31 +271,50 @@ if (cluster.isMaster) {
 
 }
 
-function clear(folder, file) {
+function clear(folder, file, callback) {
 	console.log("Requested to remove " + folder + "/" + file);
 	var p = generatePath(folder, file);
-	memCache.del(p, function() {
-		fs.unlink(path.join(cacheBasePath, p), function(err) {
-			console.log(err);
-			console.log("Removed " + path.join(cacheBasePath, generatePath(folder, file)));
-		});
+	memCache.del(p, function(err) {
+		if (err) return callback(err);
+		fs.readdir(path.join(cacheBasePath, p), function(err, files) {
+			if (err) return callback(err);
+			async.eachLimit(files, 200, function(f, cb) {
+				fs.unlink(path.join(cacheBasePath, p, f), cb);
+			}, function(err) {
+				// if (!err) {
+				// 	fs.rmdir(path.join(cacheBasePath, p), function(err) {
+				// 		if (err)
+				// 			return console.log("err: ", err);
+				// 		console.log("Removed " + path.join(cacheBasePath, generatePath(folder, file)));
+				// 		callback(err);
+				// 	})
+				// }
+				callback(err);
+			})
+		})
 	});
 }
 
+var rabbitHost = config['rabbit-host'] || 'store.taaghche.ir';
+var rabbitUsername = config['rabbit-username'] || 'raptor';
+var rabbitPassword = config['rabbit-password'] || 'raptor';
 //RabbitMq
-amqp.connect({hostname: 'store.taaghche.ir', username: 'raptor', password: 'raptor'}, function(err, conn) {
+var ex = 'image-update';
+amqp.connect({hostname: rabbitHost, username: rabbitUsername, password: rabbitPassword}, function(err, conn) {
 	if (err) return console.log('rabbitmq error(1): ' + err);
 	conn.createChannel(function(err, ch) {
 		if (err) return console.log('rabbitmq error(2): ' + err);
-	    ch.assertExchange('img-update', 'fanout', {durable: false})
+	    ch.assertExchange(ex, 'fanout', {durable: true})
   		ch.assertQueue('', {exclusive: true}, function(err, q) {
   			if (err) return console.log('rabbitmq error(3): ' + err);
-	      ch.bindQueue(q.queue, 'img-update', '');
+	      ch.bindQueue(q.queue, ex, '');
 
-	      ch.consume(q.queue, function(msg) {
-	        msg = JSON.parse(msg.content.toString());
-	        clear(msg.folder, msg.file);
-	      }, {noAck: true});
+	      ch.consume(q.queue, function(message) {
+	        msg = JSON.parse(message.content.toString());
+	        clear(msg.folder, msg.file, function(err) {
+	        	// if (!err) ch.ack(message);
+	        });
+	      }, {noAck: false});
 	    });
 	});
 });

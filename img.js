@@ -15,11 +15,6 @@ const memCache = require('./mem-cache');
 const numCPUs = require('os').cpus().length;
 
 var basePath = argv.base || 'files';
-var cacheBasePath = argv.cache || 'cache';
-var redis = true;
-var STEP = 50;
-
-var mainUrl = 'test.taaghche.ir';
 var configPath = argv._[0] || 'config.json';
 var config;
 try {
@@ -28,6 +23,12 @@ try {
 catch(err) {
 	config = {};
 }
+
+var cacheBasePath = argv.cache || config.cache || 'cache';
+var redis = true;
+var STEP = 50;
+
+var mainUrl = 'test.taaghche.ir';
 
 // var transformer = sharp('a.jpg')
 	// .resize(10, 10)

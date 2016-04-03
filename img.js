@@ -10,6 +10,7 @@ var app = express();
 var argv = require('minimist')(process.argv.slice(2));
 var gm = require('gm').subClass({imageMagick: true});
 const cluster = require('cluster');
+var amqp = require('amqplib/callback_api');
 const memCache = require('./mem-cache');
 const numCPUs = require('os').cpus().length;
 
@@ -19,6 +20,14 @@ var redis = true;
 var STEP = 50;
 
 var mainUrl = 'test.taaghche.ir';
+var configPath = argv._[0] || 'config.json';
+var config;
+try {
+	config = require('./' + (configPath));
+}
+catch(err) {
+	config = {};
+}
 
 // var transformer = sharp('a.jpg')
 	// .resize(10, 10)
@@ -251,9 +260,38 @@ if (cluster.isMaster) {
 
 	});
 
-	var port = argv.p || 37337;
+	var port = argv.port || config.port || 80;
 	app.listen(port, function () {
 	  console.log('image handler listening on port ' + port);
 	});
 
 }
+
+function clear(folder, file) {
+	console.log("Requested to remove " + folder + "/" + file);
+	var p = generatePath(folder, file);
+	memCache.del(p, function() {
+		fs.unlink(path.join(cacheBasePath, p), function(err) {
+			console.log(err);
+			console.log("Removed " + path.join(cacheBasePath, generatePath(folder, file)));
+		});
+	});
+}
+
+//RabbitMq
+amqp.connect({hostname: 'store.taaghche.ir', username: 'raptor', password: 'raptor'}, function(err, conn) {
+	if (err) return console.log('rabbitmq error(1): ' + err);
+	conn.createChannel(function(err, ch) {
+		if (err) return console.log('rabbitmq error(2): ' + err);
+	    ch.assertExchange('img-update', 'fanout', {durable: false})
+  		ch.assertQueue('', {exclusive: true}, function(err, q) {
+  			if (err) return console.log('rabbitmq error(3): ' + err);
+	      ch.bindQueue(q.queue, 'img-update', '');
+
+	      ch.consume(q.queue, function(msg) {
+	        msg = JSON.parse(msg.content.toString());
+	        clear(msg.folder, msg.file);
+	      }, {noAck: true});
+	    });
+	});
+});

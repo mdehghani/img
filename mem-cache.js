@@ -13,6 +13,9 @@ var memCache = {
 	},
 	set: function(p, val, cb) {
 		client.set(p, val, cb);
+	},
+	del: function(p, cb) {
+		client.del(p, cb);
 	}
 }
 
